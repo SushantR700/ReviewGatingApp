@@ -1,5 +1,7 @@
 package com.brandbuilder.reviewapp.model;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -9,6 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "reviews")
@@ -29,23 +32,27 @@ public class Review {
     @Column(columnDefinition = "TEXT")
     private String comment;
 
-    // Customer who gave the review
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")
     private User customer;
 
-    // Business being reviewed
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "business_profile_id")
     private BusinessProfile businessProfile;
 
     @Column(name = "created_at")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @Column(name = "updated_at")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updatedAt = LocalDateTime.now();
 
-    // Whether this review was redirected to Google (for high ratings)
     @Column(name = "redirected_to_google")
     private Boolean redirectedToGoogle = false;
+
+    // Feedback - CASCADE ALL to delete feedback when review is deleted
+    @OneToMany(mappedBy = "review", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonIgnore
+    private List<Feedback> feedback;
 }

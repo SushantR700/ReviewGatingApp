@@ -3,6 +3,8 @@ package com.brandbuilder.reviewapp.controller;
 import com.brandbuilder.reviewapp.model.BusinessProfile;
 import com.brandbuilder.reviewapp.model.User;
 import com.brandbuilder.reviewapp.repo.UserRepository;
+import com.brandbuilder.reviewapp.repo.FeedbackRepository;
+import com.brandbuilder.reviewapp.repo.ReviewRepository;
 import com.brandbuilder.reviewapp.service.BusinessProfileService;
 import com.brandbuilder.reviewapp.service.CustomOAuth2User;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,8 +12,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -30,19 +34,35 @@ public class AdminBusinessProfileController {
     @Autowired
     private UserRepository userRepository;
 
-    private boolean isAuthorizedUser(String email) {
-        if (email == null) return false;
+    @Autowired
+    private ReviewRepository reviewRepository;
 
-        // Check by email directly in database
-        Optional<User> userOpt = userRepository.findByEmail(email);
-        if (userOpt.isPresent()) {
-            User user = userOpt.get();
-            return user.getRole() == User.Role.ADMIN;
+    @Autowired
+    private FeedbackRepository feedbackRepository;
+
+    @GetMapping("/my-businesses")
+    public ResponseEntity<?> getMyBusinessProfiles(Authentication authentication) {
+        System.out.println("=== getMyBusinessProfiles called ===");
+
+        try {
+            String email = getUserEmail(authentication);
+            User user = getUserFromEmail(email);
+            if (user == null) {
+                System.out.println("User not found for email: " + email);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Could not retrieve user information for email: " + email);
+            }
+
+            List<BusinessProfile> profiles = businessProfileService.getBusinessProfilesByAdmin(user);
+            System.out.println("Found " + profiles.size() + " businesses for user");
+
+            return ResponseEntity.ok(profiles);
+        } catch (Exception e) {
+            System.err.println("Error fetching businesses: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error fetching businesses: " + e.getMessage());
         }
-
-        // Fallback: allow specific emails
-        return email.equals("sushantregmi419@gmail.com") ||
-                email.endsWith("@brandbuilder.com");
     }
 
     private String getUserEmail(Authentication authentication) {
@@ -64,33 +84,8 @@ public class AdminBusinessProfileController {
 
     private User getUserFromEmail(String email) {
         if (email == null) return null;
-
         Optional<User> userOpt = userRepository.findByEmail(email);
         return userOpt.orElse(null);
-    }
-
-    @GetMapping("/my-businesses")
-    public ResponseEntity<?> getMyBusinessProfiles(Authentication authentication) {
-        String email = getUserEmail(authentication);
-
-        if (!isAuthorizedUser(email)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body("Access denied. Admin role required. Current email: " + email);
-        }
-
-        try {
-            User user = getUserFromEmail(email);
-            if (user == null) {
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body("Could not retrieve user information for email: " + email);
-            }
-
-            List<BusinessProfile> profiles = businessProfileService.getBusinessProfilesByAdmin(user);
-            return ResponseEntity.ok(profiles);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error fetching businesses: " + e.getMessage());
-        }
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -99,14 +94,8 @@ public class AdminBusinessProfileController {
             @RequestPart(required = false) MultipartFile image,
             Authentication authentication) {
 
-        String email = getUserEmail(authentication);
-
-        if (!isAuthorizedUser(email)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body("Access denied. Admin role required.");
-        }
-
         try {
+            String email = getUserEmail(authentication);
             User user = getUserFromEmail(email);
             if (user == null) {
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -131,14 +120,8 @@ public class AdminBusinessProfileController {
             @RequestPart(required = false) MultipartFile image,
             Authentication authentication) {
 
-        String email = getUserEmail(authentication);
-
-        if (!isAuthorizedUser(email)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body("Access denied. Admin role required.");
-        }
-
         try {
+            String email = getUserEmail(authentication);
             User user = getUserFromEmail(email);
             if (user == null) {
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -157,24 +140,57 @@ public class AdminBusinessProfileController {
     }
 
     @DeleteMapping("/{id}")
+    @Transactional
     public ResponseEntity<?> deleteBusinessProfile(@PathVariable Long id, Authentication authentication) {
-        String email = getUserEmail(authentication);
-
-        if (!isAuthorizedUser(email)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body("Access denied. Admin role required.");
-        }
-
         try {
+            String email = getUserEmail(authentication);
             User user = getUserFromEmail(email);
             if (user == null) {
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                         .body("Could not retrieve user information");
             }
 
+            Optional<BusinessProfile> profileOpt = businessProfileService.getBusinessProfileById(id);
+            if (profileOpt.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+
+            BusinessProfile profile = profileOpt.get();
+
+            // Check ownership
+            if (!profile.getCreatedBy().getId().equals(user.getId())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body("Unauthorized to delete this business profile");
+            }
+
+            // Manual cascade deletion to avoid foreign key issues
+            System.out.println("=== Starting manual cascade deletion ===");
+
+            // 1. Delete all feedback for reviews of this business
+            List<com.brandbuilder.reviewapp.model.Review> reviews = reviewRepository.findByBusinessProfile(profile);
+            for (com.brandbuilder.reviewapp.model.Review review : reviews) {
+                feedbackRepository.findByReview(review).ifPresent(feedback -> {
+                    System.out.println("Deleting feedback ID: " + feedback.getId());
+                    feedbackRepository.delete(feedback);
+                });
+            }
+
+            // 2. Delete all reviews for this business
+            for (com.brandbuilder.reviewapp.model.Review review : reviews) {
+                System.out.println("Deleting review ID: " + review.getId());
+                reviewRepository.delete(review);
+            }
+
+            // 3. Delete the business profile
+            System.out.println("Deleting business profile ID: " + profile.getId());
             businessProfileService.deleteBusinessProfile(id, user);
+
+            System.out.println("=== Cascade deletion completed successfully ===");
             return ResponseEntity.ok().build();
+
         } catch (Exception e) {
+            System.err.println("Error deleting business profile: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body("Error deleting business profile: " + e.getMessage());
         }

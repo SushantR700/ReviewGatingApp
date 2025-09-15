@@ -26,16 +26,23 @@ public class AuthController {
 
     @GetMapping("/user")
     public ResponseEntity<Map<String, Object>> getCurrentUser(Authentication authentication) {
+        System.out.println("=== getCurrentUser called ===");
+        System.out.println("Authentication: " + authentication);
+
         Map<String, Object> response = new HashMap<>();
 
         if (authentication == null || !authentication.isAuthenticated()) {
+            System.out.println("No authentication found");
             response.put("authenticated", false);
             return ResponseEntity.ok(response);
         }
 
+        System.out.println("Is authenticated: " + authentication.isAuthenticated());
+
         // Handle both CustomOAuth2User and regular OAuth2User
         if (authentication.getPrincipal() instanceof CustomOAuth2User) {
             CustomOAuth2User oauth2User = (CustomOAuth2User) authentication.getPrincipal();
+            System.out.println("CustomOAuth2User found");
 
             response.put("authenticated", true);
             response.put("id", oauth2User.getUserId());
@@ -46,20 +53,48 @@ public class AuthController {
             OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
             OAuth2User oauth2User = oauthToken.getPrincipal();
 
-            response.put("authenticated", true);
-            response.put("id", oauth2User.getAttribute("sub"));
-            response.put("email", oauth2User.getAttribute("email"));
-            response.put("name", oauth2User.getAttribute("name"));
-            response.put("role", "CUSTOMER"); // Default role
+            System.out.println("OAuth2AuthenticationToken found:");
+            System.out.println("- Email: " + oauth2User.getAttribute("email"));
+            System.out.println("- Provider ID: " + oauth2User.getAttribute("sub"));
+
+            String email = oauth2User.getAttribute("email");
+            String providerId = oauth2User.getAttribute("sub");
+
+            // Find user in database
+            Optional<User> userOpt = userRepository.findByProviderAndProviderId("GOOGLE", providerId);
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                System.out.println("User found in database:");
+                System.out.println("- User ID: " + user.getId());
+                System.out.println("- Email: " + user.getEmail());
+                System.out.println("- Role: " + user.getRole());
+
+                response.put("authenticated", true);
+                response.put("id", user.getId());
+                response.put("email", user.getEmail());
+                response.put("name", user.getName());
+                response.put("role", user.getRole().name());
+            } else {
+                System.out.println("User not found in database, returning OAuth2 data with default role");
+                response.put("authenticated", true);
+                response.put("email", email);
+                response.put("name", oauth2User.getAttribute("name"));
+                response.put("role", "CUSTOMER"); // Default role
+            }
         } else {
+            System.out.println("Unknown authentication type: " + authentication.getPrincipal().getClass());
             response.put("authenticated", false);
         }
 
+        System.out.println("Final response: " + response);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/status")
     public ResponseEntity<Map<String, Object>> getAuthStatus(Authentication authentication) {
+        System.out.println("=== getAuthStatus called ===");
+        System.out.println("Authentication: " + authentication);
+
         Map<String, Object> status = new HashMap<>();
 
         if (authentication != null && authentication.isAuthenticated()) {
@@ -68,6 +103,18 @@ public class AuthController {
             if (authentication.getPrincipal() instanceof CustomOAuth2User) {
                 CustomOAuth2User oauth2User = (CustomOAuth2User) authentication.getPrincipal();
                 status.put("role", oauth2User.getRole().name());
+            } else if (authentication instanceof OAuth2AuthenticationToken) {
+                // Try to get user from database
+                OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
+                OAuth2User oauth2User = oauthToken.getPrincipal();
+                String providerId = oauth2User.getAttribute("sub");
+
+                Optional<User> userOpt = userRepository.findByProviderAndProviderId("GOOGLE", providerId);
+                if (userOpt.isPresent()) {
+                    status.put("role", userOpt.get().getRole().name());
+                } else {
+                    status.put("role", "CUSTOMER");
+                }
             } else {
                 status.put("role", "CUSTOMER");
             }
@@ -76,6 +123,7 @@ public class AuthController {
             status.put("role", null);
         }
 
+        System.out.println("Status: " + status);
         return ResponseEntity.ok(status);
     }
 
@@ -88,33 +136,39 @@ public class AuthController {
         try {
             // Get current user email
             String email = null;
+            String providerId = null;
+
             if (authentication.getPrincipal() instanceof CustomOAuth2User) {
                 CustomOAuth2User oauth2User = (CustomOAuth2User) authentication.getPrincipal();
                 email = oauth2User.getEmail();
+                providerId = oauth2User.getUser().getProviderId();
             } else if (authentication instanceof OAuth2AuthenticationToken) {
                 OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
                 OAuth2User oauth2User = oauthToken.getPrincipal();
                 email = oauth2User.getAttribute("email");
+                providerId = oauth2User.getAttribute("sub");
             }
 
-            if (email == null) {
-                return ResponseEntity.badRequest().body("Could not determine user email");
+            if (email == null || providerId == null) {
+                return ResponseEntity.badRequest().body("Could not determine user information");
             }
 
             // Only allow specific emails to upgrade (security measure)
-            if (!email.equals("sushantregmi419@gmail.com") && !email.endsWith("@brandbuilder.com")) {
+            if (!email.equals("sushantregmi419@gmail.com") &&
+                    !email.equals("junkiethunder@gmail.com") &&
+                    !email.endsWith("@brandbuilder.com")) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not authorized to upgrade to admin");
             }
 
             // Find and update user
-            Optional<User> userOpt = userRepository.findByEmail(email);
+            Optional<User> userOpt = userRepository.findByProviderAndProviderId("GOOGLE", providerId);
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
                 user.setRole(User.Role.ADMIN);
                 user.setUpdatedAt(LocalDateTime.now());
                 userRepository.save(user);
 
-                return ResponseEntity.ok().body("Successfully upgraded to admin. Please logout and login again to see changes.");
+                return ResponseEntity.ok().body("Successfully upgraded to admin. Please refresh the page to see changes.");
             } else {
                 return ResponseEntity.badRequest().body("User not found");
             }

@@ -25,7 +25,6 @@ public class Feedback {
     @Column(columnDefinition = "TEXT")
     private String feedbackText;
 
-    // Specific feedback categories
     private String serviceQuality;
     private String staffBehavior;
     private String cleanliness;
@@ -35,7 +34,6 @@ public class Feedback {
     @Column(columnDefinition = "TEXT")
     private String suggestions;
 
-    // Contact information if customer wants follow-up
     private String contactEmail;
     private String contactPhone;
 
@@ -45,7 +43,6 @@ public class Feedback {
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    // Status of feedback handling
     @Enumerated(EnumType.STRING)
     private FeedbackStatus status = FeedbackStatus.NEW;
 

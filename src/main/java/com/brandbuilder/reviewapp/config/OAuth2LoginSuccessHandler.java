@@ -25,7 +25,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
                                         Authentication authentication) throws IOException {
 
-        System.out.println("OAuth2 Login Success Handler triggered");
+        System.out.println("=== OAuth2 Login Success Handler ===");
 
         HttpSession session = request.getSession();
         String loginRole = (String) session.getAttribute("login_role");
@@ -37,7 +37,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
         String name = oauth2User.getAttribute("name");
         String providerId = oauth2User.getAttribute("sub");
 
-        System.out.println("OAuth2 user info - Email: " + email + ", Name: " + name + ", ProviderId: " + providerId);
+        System.out.println("OAuth2 user - Email: " + email + ", Name: " + name);
 
         if (oauth2User != null && email != null) {
             // Find or create user
@@ -52,12 +52,24 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
 
                 System.out.println("Existing user found - Current role: " + user.getRole());
 
-                // Update role if admin login was requested and user is not already admin
+                // Handle role switching logic
                 if ("admin".equals(loginRole)) {
+                    // Always set to ADMIN if admin login was requested
                     user.setRole(User.Role.ADMIN);
-                    System.out.println("Updated user role to ADMIN");
+                    System.out.println("Updated user role to ADMIN (admin login requested)");
+                } else if ("customer".equals(loginRole)) {
+                    // Only set to CUSTOMER if explicitly requested AND not a designated admin email
+                    if (!isDesignatedAdminEmail(email)) {
+                        user.setRole(User.Role.CUSTOMER);
+                        System.out.println("Updated user role to CUSTOMER");
+                    } else {
+                        // Keep admin role for designated admin emails
+                        System.out.println("Keeping ADMIN role for designated admin email");
+                    }
                 }
+                // If no specific role was requested, keep existing role
             } else {
+                // New user
                 user = new User();
                 user.setEmail(email);
                 user.setName(name);
@@ -68,7 +80,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
                 user.setUpdatedAt(LocalDateTime.now());
 
                 // Set role based on login type or email
-                if ("admin".equals(loginRole) || isAdminEmail(email)) {
+                if ("admin".equals(loginRole) || isDesignatedAdminEmail(email)) {
                     user.setRole(User.Role.ADMIN);
                     System.out.println("New user created with ADMIN role");
                 } else {
@@ -79,15 +91,17 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
 
             // Save user
             User savedUser = userRepository.save(user);
-            System.out.println("User saved with role: " + savedUser.getRole());
+            System.out.println("User saved with final role: " + savedUser.getRole());
 
             // Clean up session
             session.removeAttribute("login_role");
 
-            // Redirect based on role
-            String targetUrl = "http://localhost:3000/";
-            if (savedUser.getRole() == User.Role.ADMIN) {
+            // Redirect based on role and login context
+            String targetUrl;
+            if (savedUser.getRole() == User.Role.ADMIN && "admin".equals(loginRole)) {
                 targetUrl = "http://localhost:3000/admin";
+            } else {
+                targetUrl = "http://localhost:3000/";
             }
 
             System.out.println("Redirecting to: " + targetUrl);
@@ -98,9 +112,10 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
         }
     }
 
-    private boolean isAdminEmail(String email) {
+    private boolean isDesignatedAdminEmail(String email) {
         return email != null && (
                 email.equals("sushantregmi419@gmail.com") ||
+                        email.equals("junkiethunder@gmail.com") ||
                         email.endsWith("@brandbuilder.com")
         );
     }

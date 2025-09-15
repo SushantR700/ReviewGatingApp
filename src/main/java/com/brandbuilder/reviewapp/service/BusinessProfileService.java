@@ -1,12 +1,12 @@
 package com.brandbuilder.reviewapp.service;
 
 import com.brandbuilder.reviewapp.model.BusinessProfile;
-
 import com.brandbuilder.reviewapp.model.User;
 import com.brandbuilder.reviewapp.repo.BusinessProfileRepository;
 import com.brandbuilder.reviewapp.repo.ReviewRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -23,6 +23,7 @@ public class BusinessProfileService {
     @Autowired
     private ReviewRepository reviewRepository;
 
+    // Simplified methods without automatic rating updates to prevent issues
     public List<BusinessProfile> getAllBusinessProfiles() {
         return businessProfileRepository.findAll();
     }
@@ -43,6 +44,7 @@ public class BusinessProfileService {
         return businessProfileRepository.findByCreatedBy(admin);
     }
 
+    @Transactional
     public BusinessProfile createBusinessProfile(BusinessProfile profile, MultipartFile image, User admin) throws IOException {
         if (image != null && !image.isEmpty()) {
             profile.setImageName(image.getOriginalFilename());
@@ -53,10 +55,13 @@ public class BusinessProfileService {
         profile.setCreatedBy(admin);
         profile.setCreatedAt(LocalDateTime.now());
         profile.setUpdatedAt(LocalDateTime.now());
+        profile.setAverageRating(0.0);
+        profile.setTotalReviews(0);
 
         return businessProfileRepository.save(profile);
     }
 
+    @Transactional
     public BusinessProfile updateBusinessProfile(Long id, BusinessProfile updatedProfile, MultipartFile image, User admin) throws IOException {
         Optional<BusinessProfile> existingProfileOpt = businessProfileRepository.findById(id);
 
@@ -94,6 +99,7 @@ public class BusinessProfileService {
         return businessProfileRepository.save(existingProfile);
     }
 
+    @Transactional
     public void deleteBusinessProfile(Long id, User admin) {
         Optional<BusinessProfile> profileOpt = businessProfileRepository.findById(id);
 
@@ -111,13 +117,42 @@ public class BusinessProfileService {
         businessProfileRepository.deleteById(id);
     }
 
+    // Manual rating update method - call this explicitly when needed
+    @Transactional
     public void updateBusinessRating(BusinessProfile businessProfile) {
-        Double avgRating = reviewRepository.findAverageRatingByBusinessProfile(businessProfile);
-        Long totalReviews = reviewRepository.countReviewsByBusinessProfile(businessProfile);
+        try {
+            System.out.println("=== Manual rating update for business: " + businessProfile.getBusinessName() + " ===");
 
-        businessProfile.setAverageRating(avgRating != null ? avgRating : 0.0);
-        businessProfile.setTotalReviews(totalReviews.intValue());
+            Double avgRating = reviewRepository.findAverageRatingByBusinessProfile(businessProfile);
+            Long totalReviews = reviewRepository.countReviewsByBusinessProfile(businessProfile);
 
-        businessProfileRepository.save(businessProfile);
+            double finalRating = (avgRating != null) ? Math.round(avgRating * 10.0) / 10.0 : 0.0;
+            int finalCount = (totalReviews != null) ? totalReviews.intValue() : 0;
+
+            businessProfile.setAverageRating(finalRating);
+            businessProfile.setTotalReviews(finalCount);
+            businessProfile.setUpdatedAt(LocalDateTime.now());
+
+            businessProfileRepository.save(businessProfile);
+
+            System.out.println("✅ Rating updated: " + finalRating + " (" + finalCount + " reviews)");
+
+        } catch (Exception e) {
+            System.err.println("❌ Error updating rating: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    // Method for DebugController compatibility
+    @Transactional
+    public void updateAllBusinessRatings() {
+        List<BusinessProfile> allProfiles = businessProfileRepository.findAll();
+        System.out.println("=== Updating ratings for all " + allProfiles.size() + " businesses ===");
+
+        for (BusinessProfile profile : allProfiles) {
+            updateBusinessRating(profile);
+        }
+
+        System.out.println("=== Finished updating all business ratings ===");
     }
 }

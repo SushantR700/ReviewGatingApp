@@ -3,10 +3,11 @@ package com.brandbuilder.reviewapp.model;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -26,7 +27,6 @@ public class BusinessProfile {
     @Column(nullable = false)
     private String businessName;
 
-    @Pattern(regexp = "^[+]?[0-9]{10,15}$", message = "Invalid phone number format")
     private String phoneNumber;
 
     @Column(columnDefinition = "TEXT")
@@ -41,8 +41,6 @@ public class BusinessProfile {
     private String twitterUrl;
     private String linkedinUrl;
     private String websiteUrl;
-
-    // Google Review Link
     private String googleReviewUrl;
 
     // Image data
@@ -50,14 +48,14 @@ public class BusinessProfile {
     private String imageType;
 
     @Lob
-    @Column(name = "image_data", columnDefinition = "BYTEA")
-    @JsonIgnore // Don't serialize image data in JSON responses
+    @JdbcTypeCode(SqlTypes.VARBINARY)
+    @Column(name = "image_data")
+    @JsonIgnore
     private byte[] imageData;
 
-    // Admin who created this profile - IGNORE THIS IN JSON TO PREVENT LAZY LOADING ISSUES
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
-    @JsonIgnore // This prevents the serialization error
+    @JsonIgnore
     private User createdBy;
 
     @Column(name = "created_at")
@@ -66,12 +64,11 @@ public class BusinessProfile {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt = LocalDateTime.now();
 
-    // Reviews for this business - IGNORE THIS IN JSON TO PREVENT LAZY LOADING ISSUES
-    @OneToMany(mappedBy = "businessProfile", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @JsonIgnore // This prevents the serialization error and infinite recursion
+    // Reviews - CASCADE ALL to delete reviews when business is deleted
+    @OneToMany(mappedBy = "businessProfile", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<Review> reviews;
 
-    // Average rating calculation
     @Column(name = "average_rating")
     private Double averageRating = 0.0;
 
