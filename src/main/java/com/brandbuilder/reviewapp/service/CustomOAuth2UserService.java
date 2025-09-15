@@ -27,6 +27,10 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         String email = oauth2User.getAttribute("email");
         String name = oauth2User.getAttribute("name");
 
+        // Get role from request parameters (if available)
+        String roleParam = userRequest.getAdditionalParameters().get("role") != null ?
+                userRequest.getAdditionalParameters().get("role").toString() : null;
+
         // Check if user already exists
         Optional<User> existingUser = userRepository.findByProviderAndProviderId(provider, providerId);
 
@@ -37,6 +41,11 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             user.setName(name);
             user.setEmail(email);
             user.setUpdatedAt(LocalDateTime.now());
+
+            // Update role if specified and user doesn't already have admin role
+            if (roleParam != null && "admin".equals(roleParam) && user.getRole() != User.Role.ADMIN) {
+                user.setRole(User.Role.ADMIN);
+            }
         } else {
             // Create new user
             user = new User();
@@ -45,8 +54,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             user.setProvider(provider.toUpperCase());
             user.setProviderId(providerId);
 
-            // Set role based on email domain or specific emails
-            if (isAdminEmail(email)) {
+            // Set role based on login type or email domain
+            if ("admin".equals(roleParam) || isAdminEmail(email)) {
                 user.setRole(User.Role.ADMIN);
             } else {
                 user.setRole(User.Role.CUSTOMER);
@@ -67,7 +76,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         // For now, we'll use a simple check
         return email != null && (
                 email.equals("admin@brandbuilder.com") ||
-                        email.endsWith("@brandbuilder.com")
+                        email.endsWith("@brandbuilder.com") ||
+                        email.equals("sushantregmi419@gmail.com") // Add your email for testing
         );
     }
 }
