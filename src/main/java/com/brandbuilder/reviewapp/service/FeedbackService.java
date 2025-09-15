@@ -20,6 +20,9 @@ public class FeedbackService {
     @Autowired
     private ReviewRepository reviewRepository;
 
+    @Autowired
+    private EmailService emailService;
+
     public List<Feedback> getAllFeedback() {
         return feedbackRepository.findAll();
     }
@@ -63,7 +66,25 @@ public class FeedbackService {
         feedback.setCreatedAt(LocalDateTime.now());
         feedback.setStatus(Feedback.FeedbackStatus.NEW);
 
-        return feedbackRepository.save(feedback);
+        // Save feedback first
+        Feedback savedFeedback = feedbackRepository.save(feedback);
+
+        // Send email notification to business owner
+        try {
+            emailService.sendFeedbackNotificationToBusiness(savedFeedback);
+        } catch (Exception e) {
+            // Log error but don't fail feedback creation
+            System.err.println("Failed to send email notification: " + e.getMessage());
+
+            // Try simple email as fallback
+            try {
+                emailService.sendSimpleFeedbackNotification(savedFeedback);
+            } catch (Exception fallbackError) {
+                System.err.println("Fallback email also failed: " + fallbackError.getMessage());
+            }
+        }
+
+        return savedFeedback;
     }
 
     public Feedback updateFeedbackStatus(Long id, Feedback.FeedbackStatus status, String adminResponse) {

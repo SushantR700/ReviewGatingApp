@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>New Customer Feedback</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Keep styles minimal for email rendering -->
+    <style>
+        body {
+          margin: 0;
+          padding: 0;
+          background: #ffffff;
+          color: #222222;
+          line-height: 1.5;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, Helvetica, sans-serif;
+          font-size: 16px;
+        }
+        .wrapper {
+          width: 100%;
+          background: #ffffff;
+        }
+        .container {
+          max-width: 640px;
+          margin: 0 auto;
+          padding: 24px 16px;
+        }
+        h1, h2, h3, p, ul {
+          margin: 0 0 12px;
+        }
+        h1 {
+          font-size: 20px;
+          font-weight: 600;
+        }
+        h2 {
+          font-size: 16px;
+          font-weight: 600;
+          margin-top: 16px;
+        }
+        .meta {
+          color: #555555;
+          font-size: 14px;
+        }
+        .divider {
+          height: 1px;
+          background: #e6e6e6;
+          margin: 16px 0;
+        }
+        .small {
+          font-size: 13px;
+          color: #666666;
+        }
+        a {
+          color: #0b5fff;
+          text-decoration: none;
+        }
+        /* Dark-mode friendly-ish */
+        @media (prefers-color-scheme: dark) {
+          body { background: #000; color: #eaeaea; }
+          .meta, .small { color: #b5b5b5; }
+          .divider { background: #2a2a2a; }
+          a { color: #7aa7ff; }
+        }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <div class="container">
+
+        <p class="meta" th:text="${appName}">ReviewGate</p>
+        <h1>New customer feedback</h1>
+
+        <p>Hello <strong th:text="${businessOwnerName}">Business Owner</strong>,</p>
+        <p>You received new feedback for <strong th:text="${businessName}">Business Name</strong>.</p>
+
+        <div class="divider"></div>
+
+        <h2>Summary</h2>
+        <p>
+            <strong>Rating:</strong>
+            <span th:text="${rating + ' / 5'}">3 / 5</span>
+        </p>
+
+        <p class="meta">
+            <strong>Customer:</strong> <span th:text="${customerName}">Customer Name</span><br>
+            <strong>Email:</strong> <span th:text="${customerEmail}">customer@email.com</span><br>
+            <strong>Submitted:</strong> <span th:text="${submittedDate}">Date</span>
+        </p>
+
+        <div class="divider" th:if="${reviewComment != null and !#strings.isEmpty(reviewComment)}"></div>
+
+        <div th:if="${reviewComment != null and !#strings.isEmpty(reviewComment)}">
+            <h2>Review comment</h2>
+            <p th:text="${reviewComment}">Customer's review comment</p>
+        </div>
+
+        <div class="divider" th:if="${feedbackText != null and !#strings.isEmpty(feedbackText)}"></div>
+
+        <div th:if="${feedbackText != null and !#strings.isEmpty(feedbackText)}">
+            <h2>Additional feedback</h2>
+            <p th:text="${feedbackText}">Customer's additional feedback</p>
+        </div>
+
+        <div class="divider"></div>
+
+        <h2>Detailed ratings</h2>
+        <ul style="padding-left: 18px; margin-top: 8px;">
+            <li th:if="${serviceQuality != null}">
+                <strong>Service quality:</strong>
+                <span th:text="${#strings.capitalize(serviceQuality)}">Good</span>
+            </li>
+            <li th:if="${staffBehavior != null}">
+                <strong>Staff behavior:</strong>
+                <span th:text="${#strings.capitalize(staffBehavior)}">Good</span>
+            </li>
+            <li th:if="${cleanliness != null}">
+                <strong>Cleanliness:</strong>
+                <span th:text="${#strings.capitalize(cleanliness)}">Good</span>
+            </li>
+            <li th:if="${valueForMoney != null}">
+                <strong>Value for money:</strong>
+                <span th:text="${#strings.capitalize(valueForMoney)}">Good</span>
+            </li>
+            <li th:if="${overallExperience != null}">
+                <strong>Overall experience:</strong>
+                <span th:text="${#strings.capitalize(overallExperience)}">Good</span>
+            </li>
+        </ul>
+
+        <div class="divider" th:if="${suggestions != null and !#strings.isEmpty(suggestions)}"></div>
+
+        <div th:if="${suggestions != null and !#strings.isEmpty(suggestions)}">
+            <h2>Suggestions</h2>
+            <p th:text="${suggestions}">Customer suggestions</p>
+        </div>
+
+        <div class="divider" th:if="${wantsFollowup}"></div>
+
+        <div th:if="${wantsFollowup}">
+            <h2>Customer requested a follow-up</h2>
+            <p th:if="${contactEmail != null}">
+                <strong>Email:</strong>
+                <span th:text="${contactEmail}">contact@email.com</span>
+            </p>
+        </div>
+
+        <div class="divider"></div>
+
+        <h2>Next steps</h2>
+        <ul style="padding-left: 18px; margin-top: 8px;">
+            <li>Review the feedback and note specific issues</li>
+            <li th:if="${wantsFollowup}">Reach out to the customer for a follow-up</li>
+            <li>Address the points to improve service quality</li>
+            <li>Consider a courtesy reply to acknowledge their time</li>
+        </ul>
+
+        <div class="divider"></div>
+
+        <p class="small">
+            This email was sent by <span th:text="${appName}">ReviewGate</span> because you received customer feedback.
+            You’re getting this as the owner of <span th:text="${businessName}">Business Name</span>.
+        </p>
+
+    </div>
+</div>
+</body>
+</html>
