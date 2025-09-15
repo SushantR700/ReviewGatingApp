@@ -1,18 +1,13 @@
 package com.brandbuilder.reviewapp.controller;
 
 import com.brandbuilder.reviewapp.model.BusinessProfile;
-import com.brandbuilder.reviewapp.model.BusinessProfile;
 import com.brandbuilder.reviewapp.service.BusinessProfileService;
-import com.brandbuilder.reviewapp.service.CustomOAuth2User;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,18 +21,28 @@ public class BusinessProfileController {
 
     @GetMapping
     public ResponseEntity<List<BusinessProfile>> getAllBusinessProfiles() {
-        List<BusinessProfile> profiles = businessProfileService.getAllBusinessProfiles();
-        return ResponseEntity.ok(profiles);
+        System.out.println("GET /api/businesses - called");
+        try {
+            List<BusinessProfile> profiles = businessProfileService.getAllBusinessProfiles();
+            System.out.println("Found " + profiles.size() + " business profiles");
+            return ResponseEntity.ok(profiles);
+        } catch (Exception e) {
+            System.err.println("Error in getAllBusinessProfiles: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
     }
 
     @GetMapping("/top-rated")
     public ResponseEntity<List<BusinessProfile>> getTopRatedBusinessProfiles() {
+        System.out.println("GET /api/businesses/top-rated - called");
         List<BusinessProfile> profiles = businessProfileService.getBusinessProfilesByRating();
         return ResponseEntity.ok(profiles);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<BusinessProfile> getBusinessProfileById(@PathVariable Long id) {
+        System.out.println("GET /api/businesses/" + id + " - called");
         Optional<BusinessProfile> profile = businessProfileService.getBusinessProfileById(id);
         return profile.map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -45,12 +50,14 @@ public class BusinessProfileController {
 
     @GetMapping("/search")
     public ResponseEntity<List<BusinessProfile>> searchBusinessProfiles(@RequestParam String name) {
+        System.out.println("GET /api/businesses/search?name=" + name + " - called");
         List<BusinessProfile> profiles = businessProfileService.searchBusinessProfiles(name);
         return ResponseEntity.ok(profiles);
     }
 
     @GetMapping("/{id}/image")
     public ResponseEntity<byte[]> getBusinessImage(@PathVariable Long id) {
+        System.out.println("GET /api/businesses/" + id + "/image - called");
         Optional<BusinessProfile> profileOpt = businessProfileService.getBusinessProfileById(id);
 
         if (profileOpt.isPresent() && profileOpt.get().getImageData() != null) {
@@ -63,4 +70,3 @@ public class BusinessProfileController {
         return ResponseEntity.notFound().build();
     }
 }
-

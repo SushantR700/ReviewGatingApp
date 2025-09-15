@@ -1,5 +1,6 @@
 package com.brandbuilder.reviewapp.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -50,11 +51,13 @@ public class BusinessProfile {
 
     @Lob
     @Column(name = "image_data", columnDefinition = "BYTEA")
+    @JsonIgnore // Don't serialize image data in JSON responses
     private byte[] imageData;
 
-    // Admin who created this profile
+    // Admin who created this profile - IGNORE THIS IN JSON TO PREVENT LAZY LOADING ISSUES
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
+    @JsonIgnore // This prevents the serialization error
     private User createdBy;
 
     @Column(name = "created_at")
@@ -63,8 +66,9 @@ public class BusinessProfile {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt = LocalDateTime.now();
 
-    // Reviews for this business
+    // Reviews for this business - IGNORE THIS IN JSON TO PREVENT LAZY LOADING ISSUES
     @OneToMany(mappedBy = "businessProfile", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore // This prevents the serialization error and infinite recursion
     private List<Review> reviews;
 
     // Average rating calculation
