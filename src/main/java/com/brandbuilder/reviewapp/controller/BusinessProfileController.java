@@ -48,6 +48,21 @@ public class BusinessProfileController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    // NEW: Get business by name slug
+    @GetMapping("/name/{businessNameSlug}")
+    public ResponseEntity<BusinessProfile> getBusinessProfileByName(@PathVariable String businessNameSlug) {
+        System.out.println("GET /api/businesses/name/" + businessNameSlug + " - called");
+        try {
+            Optional<BusinessProfile> profile = businessProfileService.getBusinessProfileByNameSlug(businessNameSlug);
+            return profile.map(ResponseEntity::ok)
+                    .orElse(ResponseEntity.notFound().build());
+        } catch (Exception e) {
+            System.err.println("Error in getBusinessProfileByName: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.notFound().build();
+        }
+    }
+
     @GetMapping("/search")
     public ResponseEntity<List<BusinessProfile>> searchBusinessProfiles(@RequestParam String name) {
         System.out.println("GET /api/businesses/search?name=" + name + " - called");

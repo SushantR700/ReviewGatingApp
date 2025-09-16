@@ -7,11 +7,14 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -29,7 +32,10 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
 
         HttpSession session = request.getSession();
         String loginRole = (String) session.getAttribute("login_role");
+        String returnUrl = (String) session.getAttribute("return_url");
+
         System.out.println("Login role from session: " + loginRole);
+        System.out.println("Return URL from session: " + returnUrl);
 
         // Get user info from OAuth2
         OAuth2User oauth2User = (OAuth2User) authentication.getPrincipal();
@@ -95,20 +101,64 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
 
             // Clean up session
             session.removeAttribute("login_role");
+            session.removeAttribute("return_url");
 
-            // Redirect based on role and login context
-            String targetUrl;
-            if (savedUser.getRole() == User.Role.ADMIN && "admin".equals(loginRole)) {
-                targetUrl = "http://localhost:3000/admin";
-            } else {
-                targetUrl = "http://localhost:3000/";
-            }
+            // Determine redirect URL
+            String targetUrl = determineTargetUrl(savedUser, loginRole, returnUrl);
 
             System.out.println("Redirecting to: " + targetUrl);
             response.sendRedirect(targetUrl);
         } else {
             System.out.println("OAuth2 user data incomplete, redirecting with error");
             response.sendRedirect("http://localhost:3000/?error=login_failed");
+        }
+    }
+
+    private String determineTargetUrl(User user, String loginRole, String returnUrl) {
+        // If we have a return URL, use it (for business detail pages, etc.)
+        if (returnUrl != null && !returnUrl.trim().isEmpty()) {
+            try {
+                // Decode the URL in case it was encoded
+                String decodedUrl = URLDecoder.decode(returnUrl, StandardCharsets.UTF_8);
+
+                // Validate that it's a safe redirect (same origin)
+                if (isSafeRedirectUrl(decodedUrl)) {
+                    System.out.println("Redirecting to return URL: " + decodedUrl);
+                    return decodedUrl;
+                }
+            } catch (Exception e) {
+                System.err.println("Error processing return URL: " + e.getMessage());
+            }
+        }
+
+        // Fallback to role-based redirect
+        if (user.getRole() == User.Role.ADMIN && "admin".equals(loginRole)) {
+            return "http://localhost:3000/admin";
+        } else {
+            return "http://localhost:3000/";
+        }
+    }
+
+    private boolean isSafeRedirectUrl(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            return false;
+        }
+
+        try {
+            // Parse the URL to check if it's safe
+            if (url.startsWith("http://localhost:3000") || url.startsWith("http://127.0.0.1:3000")) {
+                return true;
+            }
+
+            // Allow relative URLs that start with /
+            if (url.startsWith("/") && !url.startsWith("//")) {
+                return true;
+            }
+
+            return false;
+        } catch (Exception e) {
+            System.err.println("Error validating redirect URL: " + e.getMessage());
+            return false;
         }
     }
 

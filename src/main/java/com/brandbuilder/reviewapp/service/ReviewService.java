@@ -39,6 +39,34 @@ public class ReviewService {
         return List.of();
     }
 
+    // NEW: Get reviews for business owner with ownership verification
+    public List<Review> getReviewsForBusinessOwner(Long businessProfileId, User businessOwner) {
+        System.out.println("=== Getting reviews for business owner ===");
+        System.out.println("Business ID: " + businessProfileId);
+        System.out.println("Owner: " + businessOwner.getName());
+
+        Optional<BusinessProfile> businessProfileOpt = businessProfileRepository.findById(businessProfileId);
+        if (businessProfileOpt.isEmpty()) {
+            throw new RuntimeException("Business profile not found with id: " + businessProfileId);
+        }
+
+        BusinessProfile businessProfile = businessProfileOpt.get();
+
+        // Verify that this business owner actually owns this business
+        if (!businessProfile.getCreatedBy().getId().equals(businessOwner.getId())) {
+            System.out.println("Business owner verification failed:");
+            System.out.println("Business created by: " + businessProfile.getCreatedBy().getName() + " (ID: " + businessProfile.getCreatedBy().getId() + ")");
+            System.out.println("Current user: " + businessOwner.getName() + " (ID: " + businessOwner.getId() + ")");
+            throw new RuntimeException("Unauthorized: You can only view reviews for your own businesses");
+        }
+
+        System.out.println("Ownership verified. Fetching reviews...");
+        List<Review> reviews = reviewRepository.findByBusinessProfile(businessProfile);
+        System.out.println("Found " + reviews.size() + " reviews");
+
+        return reviews;
+    }
+
     public List<Review> getReviewsByCustomer(User customer) {
         return reviewRepository.findByCustomer(customer);
     }

@@ -23,6 +23,31 @@ public class BusinessProfileService {
     @Autowired
     private ReviewRepository reviewRepository;
 
+    // Helper method to create URL-friendly business name slug
+    private String createBusinessSlug(String businessName) {
+        if (businessName == null || businessName.trim().isEmpty()) {
+            return "";
+        }
+
+        return businessName
+                .toLowerCase()
+                .replaceAll("[^a-z0-9\\s-]", "") // Remove special characters except spaces and hyphens
+                .replaceAll("\\s+", "-") // Replace spaces with hyphens
+                .replaceAll("-+", "-") // Replace multiple hyphens with single hyphen
+                .trim()
+                .replaceAll("^-+|-+$", ""); // Remove leading/trailing hyphens
+    }
+
+    // Helper method to match business name slug
+    private boolean matchesBusinessSlug(BusinessProfile business, String searchSlug) {
+        if (business == null || business.getBusinessName() == null || searchSlug == null) {
+            return false;
+        }
+
+        String businessSlug = createBusinessSlug(business.getBusinessName());
+        return businessSlug.equals(searchSlug.toLowerCase());
+    }
+
     // Simplified methods without automatic rating updates to prevent issues
     public List<BusinessProfile> getAllBusinessProfiles() {
         return businessProfileRepository.findAll();
@@ -34,6 +59,32 @@ public class BusinessProfileService {
 
     public Optional<BusinessProfile> getBusinessProfileById(Long id) {
         return businessProfileRepository.findById(id);
+    }
+
+    // NEW: Get business profile by name slug
+    public Optional<BusinessProfile> getBusinessProfileByNameSlug(String businessNameSlug) {
+        System.out.println("=== Looking for business with slug: " + businessNameSlug + " ===");
+
+        if (businessNameSlug == null || businessNameSlug.trim().isEmpty()) {
+            System.out.println("Empty slug provided");
+            return Optional.empty();
+        }
+
+        // Get all businesses and find the one that matches the slug
+        List<BusinessProfile> allBusinesses = businessProfileRepository.findAll();
+
+        for (BusinessProfile business : allBusinesses) {
+            String businessSlug = createBusinessSlug(business.getBusinessName());
+            System.out.println("Checking business: " + business.getBusinessName() + " -> slug: " + businessSlug);
+
+            if (businessSlug.equals(businessNameSlug.toLowerCase())) {
+                System.out.println("Found matching business: " + business.getBusinessName());
+                return Optional.of(business);
+            }
+        }
+
+        System.out.println("No business found for slug: " + businessNameSlug);
+        return Optional.empty();
     }
 
     public List<BusinessProfile> searchBusinessProfiles(String businessName) {
