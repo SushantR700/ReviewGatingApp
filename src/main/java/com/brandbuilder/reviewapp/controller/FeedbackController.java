@@ -7,8 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/feedback")
@@ -23,10 +22,23 @@ public class FeedbackController {
             @PathVariable Long reviewId,
             @RequestBody Feedback feedback) {
 
+        System.out.println("=== Create Feedback Endpoint Called ===");
+        System.out.println("Review ID: " + reviewId);
+        System.out.println("Feedback: " + feedback.getFeedbackText());
+
         try {
             Feedback savedFeedback = feedbackService.createFeedback(feedback, reviewId);
-            return ResponseEntity.status(HttpStatus.CREATED).body(savedFeedback);
+            System.out.println("Feedback created successfully: " + savedFeedback.getId());
+
+            // Return a simple success response to avoid circular reference
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(Map.of(
+                            "success", true,
+                            "message", "Feedback submitted successfully",
+                            "id", savedFeedback.getId()
+                    ));
         } catch (Exception e) {
+            System.err.println("Error creating feedback: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body("Error creating feedback: " + e.getMessage());
         }
@@ -39,4 +51,3 @@ public class FeedbackController {
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
 }
-

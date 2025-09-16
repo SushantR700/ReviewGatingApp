@@ -6,6 +6,7 @@ import com.brandbuilder.reviewapp.repo.FeedbackRepository;
 import com.brandbuilder.reviewapp.repo.ReviewRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -43,7 +44,11 @@ public class FeedbackService {
         return feedbackRepository.findByReview(review);
     }
 
+    @Transactional
     public Feedback createFeedback(Feedback feedback, Long reviewId) {
+        System.out.println("=== Creating Feedback ===");
+        System.out.println("Review ID: " + reviewId);
+
         Optional<Review> reviewOpt = reviewRepository.findById(reviewId);
 
         if (reviewOpt.isEmpty()) {
@@ -51,9 +56,12 @@ public class FeedbackService {
         }
 
         Review review = reviewOpt.get();
+        System.out.println("Found review with rating: " + review.getRating());
 
         // Check if feedback already exists for this review
-        if (feedbackRepository.findByReview(review).isPresent()) {
+        Optional<Feedback> existingFeedback = feedbackRepository.findByReview(review);
+        if (existingFeedback.isPresent()) {
+            System.out.println("Feedback already exists for review ID: " + reviewId);
             throw new RuntimeException("Feedback already exists for this review");
         }
 
@@ -66,11 +74,14 @@ public class FeedbackService {
         feedback.setCreatedAt(LocalDateTime.now());
         feedback.setStatus(Feedback.FeedbackStatus.NEW);
 
+        System.out.println("Saving feedback...");
         // Save feedback first
         Feedback savedFeedback = feedbackRepository.save(feedback);
+        System.out.println("Feedback saved with ID: " + savedFeedback.getId());
 
-        // Send email notification to business owner
+        // Send email notification to business owner (in background thread to avoid blocking)
         try {
+            System.out.println("Attempting to send email notification...");
             emailService.sendFeedbackNotificationToBusiness(savedFeedback);
         } catch (Exception e) {
             // Log error but don't fail feedback creation

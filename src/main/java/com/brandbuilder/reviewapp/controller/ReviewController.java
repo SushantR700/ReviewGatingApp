@@ -27,37 +27,61 @@ public class ReviewController {
     @Autowired
     private UserRepository userRepository;
 
-    // Helper method to get user from authentication
+    // Helper method to get user from authentication - FIXED
     private User getUserFromAuthentication(Authentication authentication) {
+        System.out.println("=== getUserFromAuthentication called ===");
+        System.out.println("Authentication: " + authentication);
+        System.out.println("Authentication type: " + (authentication != null ? authentication.getClass().getSimpleName() : "null"));
+
         if (authentication == null || !authentication.isAuthenticated()) {
+            System.out.println("Authentication is null or not authenticated");
             return null;
         }
 
         if (authentication.getPrincipal() instanceof CustomOAuth2User) {
             CustomOAuth2User oauth2User = (CustomOAuth2User) authentication.getPrincipal();
-            return oauth2User.getUser();
+            User user = oauth2User.getUser();
+            System.out.println("CustomOAuth2User found - User: " + user.getName() + " (" + user.getEmail() + ")");
+            return user;
         } else if (authentication instanceof OAuth2AuthenticationToken) {
             OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
             OAuth2User oauth2User = oauthToken.getPrincipal();
 
             String email = oauth2User.getAttribute("email");
             String providerId = oauth2User.getAttribute("sub");
+            String name = oauth2User.getAttribute("name");
 
-            // Try to find user in database
+            System.out.println("OAuth2AuthenticationToken found:");
+            System.out.println("- Email: " + email);
+            System.out.println("- Provider ID: " + providerId);
+            System.out.println("- Name: " + name);
+
+            // Try to find user in database by provider ID first (more reliable)
             if (providerId != null) {
                 Optional<User> userOpt = userRepository.findByProviderAndProviderId("GOOGLE", providerId);
                 if (userOpt.isPresent()) {
-                    return userOpt.get();
+                    User user = userOpt.get();
+                    System.out.println("User found by provider ID: " + user.getName() + " (" + user.getEmail() + ")");
+                    return user;
                 }
             }
 
             // Fallback to email lookup
             if (email != null) {
                 Optional<User> userOpt = userRepository.findByEmail(email);
-                return userOpt.orElse(null);
+                if (userOpt.isPresent()) {
+                    User user = userOpt.get();
+                    System.out.println("User found by email: " + user.getName() + " (" + user.getEmail() + ")");
+                    return user;
+                } else {
+                    System.out.println("No user found by email: " + email);
+                }
             }
+
+            System.out.println("No user found in database");
         }
 
+        System.out.println("Returning null - no user found");
         return null;
     }
 
@@ -107,11 +131,9 @@ public class ReviewController {
 
         System.out.println("=== hasReviewedBusiness called ===");
         System.out.println("Business ID: " + businessId);
-        System.out.println("Authentication: " + authentication);
-        System.out.println("Authentication type: " + (authentication != null ? authentication.getClass().getSimpleName() : "null"));
 
         User user = getUserFromAuthentication(authentication);
-        System.out.println("Retrieved user: " + user);
+        System.out.println("Retrieved user: " + (user != null ? user.getName() + " (" + user.getEmail() + ")" : "null"));
 
         if (user == null) {
             System.out.println("No user found, returning 401");
@@ -146,13 +168,21 @@ public class ReviewController {
                     .body("Please log in to leave a review");
         }
 
-        System.out.println("User authenticated: " + user.getEmail());
+        System.out.println("User authenticated: " + user.getName() + " (" + user.getEmail() + ")");
 
         try {
             // Validate input
             if (review.getRating() == null || review.getRating() < 1 || review.getRating() > 5) {
+                System.out.println("Invalid rating: " + review.getRating());
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body("Rating must be between 1 and 5");
+            }
+
+            // Check if user has already reviewed this business
+            if (reviewService.hasCustomerReviewedBusiness(user, businessId)) {
+                System.out.println("User has already reviewed this business");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("You have already reviewed this business");
             }
 
             Review savedReview = reviewService.createReview(review, user, businessId);
@@ -167,11 +197,11 @@ public class ReviewController {
             if (savedReview.getRating() >= 4) {
                 response.setShouldRedirectToGoogle(true);
                 response.setShouldShowFeedbackForm(false);
-                System.out.println("High rating - will redirect to Google");
+                System.out.println("High rating (" + savedReview.getRating() + ") - will redirect to Google");
             } else if (savedReview.getRating() <= 3) {
                 response.setShouldRedirectToGoogle(false);
                 response.setShouldShowFeedbackForm(true);
-                System.out.println("Low rating - will show feedback form");
+                System.out.println("Low rating (" + savedReview.getRating() + ") - will show feedback form");
             } else {
                 // Default case (shouldn't happen with 1-5 rating)
                 response.setShouldRedirectToGoogle(false);

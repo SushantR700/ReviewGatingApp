@@ -32,7 +32,8 @@ public class Review {
     @Column(columnDefinition = "TEXT")
     private String comment;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    // CHANGED: Use EAGER loading to ensure customer is always loaded with review
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "customer_id")
     private User customer;
 
