@@ -1,5 +1,6 @@
 package com.brandbuilder.reviewapp.service;
 
+import com.brandbuilder.reviewapp.controller.ReviewController;
 import com.brandbuilder.reviewapp.model.BusinessProfile;
 import com.brandbuilder.reviewapp.model.Review;
 import com.brandbuilder.reviewapp.model.User;
@@ -27,6 +28,9 @@ public class ReviewService {
     @Autowired
     private EntityManager entityManager;
 
+    @Autowired
+    private EmailService emailService;
+
     public List<Review> getAllReviews() {
         return reviewRepository.findAll();
     }
@@ -39,7 +43,6 @@ public class ReviewService {
         return List.of();
     }
 
-    // NEW: Get reviews for business owner with ownership verification
     public List<Review> getReviewsForBusinessOwner(Long businessProfileId, User businessOwner) {
         System.out.println("=== Getting reviews for business owner ===");
         System.out.println("Business ID: " + businessProfileId);
@@ -83,8 +86,80 @@ public class ReviewService {
         return false;
     }
 
+    // UPDATED: Create anonymous review WITH email notification for low ratings
+    @Transactional
+    public Review createAnonymousReview(ReviewController.AnonymousReviewRequest request, Long businessProfileId) {
+        System.out.println("=== Creating Anonymous Review ===");
+        System.out.println("Business ID: " + businessProfileId);
+        System.out.println("Anonymous: " + request.getIsAnonymous());
+        System.out.println("Rating: " + request.getRating());
+
+        Optional<BusinessProfile> businessProfileOpt = businessProfileRepository.findById(businessProfileId);
+
+        if (businessProfileOpt.isEmpty()) {
+            throw new RuntimeException("Business profile not found with id: " + businessProfileId);
+        }
+
+        BusinessProfile businessProfile = businessProfileOpt.get();
+
+        // Create review
+        Review review = new Review();
+        review.setRating(request.getRating());
+        review.setComment(request.getComment() != null ? request.getComment().trim() : "");
+        review.setBusinessProfile(businessProfile);
+        review.setCreatedAt(LocalDateTime.now());
+        review.setUpdatedAt(LocalDateTime.now());
+        review.setIsAnonymous(request.getIsAnonymous());
+
+        // Set customer info based on anonymous flag
+        if (request.getIsAnonymous()) {
+            review.setCustomer(null);
+            review.setCustomerName("");
+            review.setCustomerEmail("");
+            review.setCustomerPhone("");
+        } else {
+            review.setCustomer(null); // Still null since no user account
+            review.setCustomerName(request.getCustomerName() != null ? request.getCustomerName().trim() : "");
+            review.setCustomerEmail(request.getCustomerEmail() != null ? request.getCustomerEmail().trim() : "");
+            review.setCustomerPhone(request.getCustomerPhone() != null ? request.getCustomerPhone().trim() : "");
+        }
+
+        // Set redirect flag based on rating
+        if (review.getRating() > 3) {
+            review.setRedirectedToGoogle(true);
+        }
+
+        // Save the review first
+        Review savedReview = reviewRepository.save(review);
+
+        // Force flush to ensure review is saved before updating business rating
+        entityManager.flush();
+
+        // Update business profile rating using native query to avoid validation issues
+        updateBusinessRatingDirectly(businessProfile);
+
+        // NEW: Send email notification for low ratings (1-3) - regardless of feedback form
+        if (savedReview.getRating() <= 3) {
+            System.out.println("Low rating detected (" + savedReview.getRating() + "), sending email notification...");
+            try {
+                emailService.sendReviewNotificationToBusiness(savedReview);
+            } catch (Exception e) {
+                System.err.println("Failed to send review email notification: " + e.getMessage());
+                // Don't fail the review creation if email fails
+            }
+        }
+
+        return savedReview;
+    }
+
+    // UPDATED: Create review WITH email notification for low ratings
     @Transactional
     public Review createReview(Review review, User customer, Long businessProfileId) {
+        System.out.println("=== Creating Authenticated User Review ===");
+        System.out.println("Business ID: " + businessProfileId);
+        System.out.println("Customer: " + customer.getName());
+        System.out.println("Rating: " + review.getRating());
+
         Optional<BusinessProfile> businessProfileOpt = businessProfileRepository.findById(businessProfileId);
 
         if (businessProfileOpt.isEmpty()) {
@@ -103,6 +178,11 @@ public class ReviewService {
         review.setCreatedAt(LocalDateTime.now());
         review.setUpdatedAt(LocalDateTime.now());
 
+        // Set customer info from user account
+        review.setCustomerName(customer.getName());
+        review.setCustomerEmail(customer.getEmail());
+        review.setIsAnonymous(false);
+
         // Set redirect flag based on rating
         if (review.getRating() > 3) {
             review.setRedirectedToGoogle(true);
@@ -116,6 +196,17 @@ public class ReviewService {
 
         // Update business profile rating using native query to avoid validation issues
         updateBusinessRatingDirectly(businessProfile);
+
+        // NEW: Send email notification for low ratings (1-3) - regardless of feedback form
+        if (savedReview.getRating() <= 3) {
+            System.out.println("Low rating detected (" + savedReview.getRating() + "), sending email notification...");
+            try {
+                emailService.sendReviewNotificationToBusiness(savedReview);
+            } catch (Exception e) {
+                System.err.println("Failed to send review email notification: " + e.getMessage());
+                // Don't fail the review creation if email fails
+            }
+        }
 
         return savedReview;
     }

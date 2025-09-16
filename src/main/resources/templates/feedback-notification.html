@@ -49,6 +49,16 @@
           font-size: 13px;
           color: #666666;
         }
+        .anonymous-badge {
+          display: inline-block;
+          background: #f3f4f6;
+          color: #6b7280;
+          padding: 4px 8px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 500;
+          margin-left: 8px;
+        }
         a {
           color: #0b5fff;
           text-decoration: none;
@@ -58,6 +68,7 @@
           body { background: #000; color: #eaeaea; }
           .meta, .small { color: #b5b5b5; }
           .divider { background: #2a2a2a; }
+          .anonymous-badge { background: #374151; color: #9ca3af; }
           a { color: #7aa7ff; }
         }
     </style>
@@ -81,8 +92,16 @@
         </p>
 
         <p class="meta">
-            <strong>Customer:</strong> <span th:text="${customerName}">Customer Name</span><br>
-            <strong>Email:</strong> <span th:text="${customerEmail}">customer@email.com</span><br>
+            <strong>Customer:</strong>
+            <span th:text="${customerName}">Customer Name</span>
+            <span th:if="${isAnonymous}" class="anonymous-badge">Anonymous</span>
+            <br>
+
+            <!-- Only show email if not anonymous and email exists -->
+            <span th:if="${!isAnonymous and customerEmail != null and !#strings.isEmpty(customerEmail)}">
+                <strong>Email:</strong> <span th:text="${customerEmail}">customer@email.com</span><br>
+            </span>
+
             <strong>Submitted:</strong> <span th:text="${submittedDate}">Date</span>
         </p>
 
@@ -133,13 +152,17 @@
             <p th:text="${suggestions}">Customer suggestions</p>
         </div>
 
-        <div class="divider" th:if="${wantsFollowup}"></div>
+        <div class="divider" th:if="${wantsFollowup and !isAnonymous}"></div>
 
-        <div th:if="${wantsFollowup}">
+        <div th:if="${wantsFollowup and !isAnonymous}">
             <h2>Customer requested a follow-up</h2>
             <p th:if="${contactEmail != null}">
                 <strong>Email:</strong>
                 <span th:text="${contactEmail}">contact@email.com</span>
+            </p>
+            <p th:if="${contactPhone != null}">
+                <strong>Phone:</strong>
+                <span th:text="${contactPhone}">contact phone</span>
             </p>
         </div>
 
@@ -148,16 +171,17 @@
         <h2>Next steps</h2>
         <ul style="padding-left: 18px; margin-top: 8px;">
             <li>Review the feedback and note specific issues</li>
-            <li th:if="${wantsFollowup}">Reach out to the customer for a follow-up</li>
+            <li th:if="${wantsFollowup and !isAnonymous}">Reach out to the customer for a follow-up</li>
             <li>Address the points to improve service quality</li>
-            <li>Consider a courtesy reply to acknowledge their time</li>
+            <li th:if="${!isAnonymous}">Consider a courtesy reply to acknowledge their time</li>
+            <li th:if="${isAnonymous}">Use this feedback to improve your service for future customers</li>
         </ul>
 
         <div class="divider"></div>
 
         <p class="small">
             This email was sent by <span th:text="${appName}">ReviewGate</span> because you received customer feedback.
-            You’re getting this as the owner of <span th:text="${businessName}">Business Name</span>.
+            You're getting this as the owner of <span th:text="${businessName}">Business Name</span>.
         </p>
 
     </div>

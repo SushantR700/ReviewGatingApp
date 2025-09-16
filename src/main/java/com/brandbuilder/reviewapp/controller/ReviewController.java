@@ -136,8 +136,8 @@ public class ReviewController {
         System.out.println("Retrieved user: " + (user != null ? user.getName() + " (" + user.getEmail() + ")" : "null"));
 
         if (user == null) {
-            System.out.println("No user found, returning 401");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            System.out.println("No user found, returning false (anonymous users can review multiple times)");
+            return ResponseEntity.ok(false);
         }
 
         try {
@@ -147,6 +147,77 @@ public class ReviewController {
         } catch (Exception e) {
             System.err.println("Error checking review status: " + e.getMessage());
             return ResponseEntity.ok(false); // Default to false if error
+        }
+    }
+
+    // NEW: Anonymous review endpoint
+    @PostMapping("/anonymous/business/{businessId}")
+    public ResponseEntity<?> createAnonymousReview(
+            @PathVariable Long businessId,
+            @RequestBody AnonymousReviewRequest request) {
+
+        System.out.println("=== Create Anonymous Review Endpoint Called ===");
+        System.out.println("Business ID: " + businessId);
+        System.out.println("Rating: " + request.getRating());
+        System.out.println("Comment: " + request.getComment());
+        System.out.println("Customer Name: " + request.getCustomerName());
+        System.out.println("Customer Email: " + request.getCustomerEmail());
+        System.out.println("Is Anonymous: " + request.getIsAnonymous());
+
+        try {
+            // Validate input
+            if (request.getRating() == null || request.getRating() < 1 || request.getRating() > 5) {
+                System.out.println("Invalid rating: " + request.getRating());
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("Rating must be between 1 and 5");
+            }
+
+            // If not anonymous, validate required fields
+            if (!request.getIsAnonymous()) {
+                if (request.getCustomerName() == null || request.getCustomerName().trim().isEmpty()) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body("Customer name is required when not anonymous");
+                }
+                if (request.getCustomerEmail() == null || request.getCustomerEmail().trim().isEmpty()) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body("Customer email is required when not anonymous");
+                }
+                // Basic email validation
+                if (!request.getCustomerEmail().matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body("Please provide a valid email address");
+                }
+            }
+
+            Review savedReview = reviewService.createAnonymousReview(request, businessId);
+            System.out.println("Anonymous review created successfully: " + savedReview.getId());
+
+            // Create response with proper logic
+            ReviewResponse response = new ReviewResponse();
+            response.setReview(savedReview);
+
+            // FIXED LOGIC: High ratings (4-5) should redirect to Google
+            // Low ratings (1-3) should show feedback form
+            if (savedReview.getRating() >= 4) {
+                response.setShouldRedirectToGoogle(true);
+                response.setShouldShowFeedbackForm(false);
+                System.out.println("High rating (" + savedReview.getRating() + ") - will redirect to Google");
+            } else if (savedReview.getRating() <= 3) {
+                response.setShouldRedirectToGoogle(false);
+                response.setShouldShowFeedbackForm(true);
+                System.out.println("Low rating (" + savedReview.getRating() + ") - will show feedback form");
+            } else {
+                // Default case (shouldn't happen with 1-5 rating)
+                response.setShouldRedirectToGoogle(false);
+                response.setShouldShowFeedbackForm(false);
+            }
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (Exception e) {
+            System.err.println("Error creating anonymous review: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("Error creating review: " + e.getMessage());
         }
     }
 
@@ -271,6 +342,35 @@ public class ReviewController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body("Error deleting review: " + e.getMessage());
         }
+    }
+
+    // DTO for anonymous review request
+    public static class AnonymousReviewRequest {
+        private Integer rating;
+        private String comment;
+        private String customerName;
+        private String customerEmail;
+        private String customerPhone;
+        private Boolean isAnonymous;
+
+        // Getters and setters
+        public Integer getRating() { return rating; }
+        public void setRating(Integer rating) { this.rating = rating; }
+
+        public String getComment() { return comment; }
+        public void setComment(String comment) { this.comment = comment; }
+
+        public String getCustomerName() { return customerName; }
+        public void setCustomerName(String customerName) { this.customerName = customerName; }
+
+        public String getCustomerEmail() { return customerEmail; }
+        public void setCustomerEmail(String customerEmail) { this.customerEmail = customerEmail; }
+
+        public String getCustomerPhone() { return customerPhone; }
+        public void setCustomerPhone(String customerPhone) { this.customerPhone = customerPhone; }
+
+        public Boolean getIsAnonymous() { return isAnonymous; }
+        public void setIsAnonymous(Boolean isAnonymous) { this.isAnonymous = isAnonymous; }
     }
 
     // DTO for review response

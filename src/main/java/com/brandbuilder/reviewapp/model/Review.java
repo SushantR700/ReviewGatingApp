@@ -32,7 +32,7 @@ public class Review {
     @Column(columnDefinition = "TEXT")
     private String comment;
 
-    // CHANGED: Use EAGER loading to ensure customer is always loaded with review
+    // CHANGED: Use EAGER loading but make it optional for anonymous reviews
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "customer_id")
     private User customer;
@@ -51,6 +51,19 @@ public class Review {
 
     @Column(name = "redirected_to_google")
     private Boolean redirectedToGoogle = false;
+
+    // NEW: Fields for anonymous reviews
+    @Column(name = "customer_name")
+    private String customerName;
+
+    @Column(name = "customer_email")
+    private String customerEmail;
+
+    @Column(name = "customer_phone")
+    private String customerPhone;
+
+    @Column(name = "is_anonymous")
+    private Boolean isAnonymous = false;
 
     // Feedback - CASCADE ALL to delete feedback when review is deleted
     @OneToMany(mappedBy = "review", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)

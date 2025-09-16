@@ -21,8 +21,7 @@ public class FeedbackService {
     @Autowired
     private ReviewRepository reviewRepository;
 
-    @Autowired
-    private EmailService emailService;
+    // REMOVED: EmailService - no longer sending emails from feedback creation
 
     public List<Feedback> getAllFeedback() {
         return feedbackRepository.findAll();
@@ -75,25 +74,12 @@ public class FeedbackService {
         feedback.setStatus(Feedback.FeedbackStatus.NEW);
 
         System.out.println("Saving feedback...");
-        // Save feedback first
+        // Save feedback
         Feedback savedFeedback = feedbackRepository.save(feedback);
-        System.out.println("Feedback saved with ID: " + savedFeedback.getId());
+        System.out.println("✅ Feedback saved with ID: " + savedFeedback.getId());
 
-        // Send email notification to business owner (in background thread to avoid blocking)
-        try {
-            System.out.println("Attempting to send email notification...");
-            emailService.sendFeedbackNotificationToBusiness(savedFeedback);
-        } catch (Exception e) {
-            // Log error but don't fail feedback creation
-            System.err.println("Failed to send email notification: " + e.getMessage());
-
-            // Try simple email as fallback
-            try {
-                emailService.sendSimpleFeedbackNotification(savedFeedback);
-            } catch (Exception fallbackError) {
-                System.err.println("Fallback email also failed: " + fallbackError.getMessage());
-            }
-        }
+        // REMOVED: Email sending - emails are now sent when the review is initially submitted
+        System.out.println("📧 Email was already sent when the review was initially submitted. No additional email sent for feedback.");
 
         return savedFeedback;
     }
