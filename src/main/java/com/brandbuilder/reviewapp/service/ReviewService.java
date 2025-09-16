@@ -28,8 +28,7 @@ public class ReviewService {
     @Autowired
     private EntityManager entityManager;
 
-    @Autowired
-    private EmailService emailService;
+    // REMOVED EmailService - NO EMAIL SENT FROM REVIEWS
 
     public List<Review> getAllReviews() {
         return reviewRepository.findAll();
@@ -86,7 +85,7 @@ public class ReviewService {
         return false;
     }
 
-    // UPDATED: Create anonymous review WITH email notification for low ratings
+    // FIXED: Create anonymous review WITHOUT any email
     @Transactional
     public Review createAnonymousReview(ReviewController.AnonymousReviewRequest request, Long businessProfileId) {
         System.out.println("=== Creating Anonymous Review ===");
@@ -138,21 +137,13 @@ public class ReviewService {
         // Update business profile rating using native query to avoid validation issues
         updateBusinessRatingDirectly(businessProfile);
 
-        // NEW: Send email notification for low ratings (1-3) - regardless of feedback form
-        if (savedReview.getRating() <= 3) {
-            System.out.println("Low rating detected (" + savedReview.getRating() + "), sending email notification...");
-            try {
-                emailService.sendReviewNotificationToBusiness(savedReview);
-            } catch (Exception e) {
-                System.err.println("Failed to send review email notification: " + e.getMessage());
-                // Don't fail the review creation if email fails
-            }
-        }
+        // NO EMAIL SENT HERE - emails will be sent only when feedback is complete
+        System.out.println("Review saved. NO email sent - waiting for feedback completion.");
 
         return savedReview;
     }
 
-    // UPDATED: Create review WITH email notification for low ratings
+    // FIXED: Create review WITHOUT any email
     @Transactional
     public Review createReview(Review review, User customer, Long businessProfileId) {
         System.out.println("=== Creating Authenticated User Review ===");
@@ -197,16 +188,8 @@ public class ReviewService {
         // Update business profile rating using native query to avoid validation issues
         updateBusinessRatingDirectly(businessProfile);
 
-        // NEW: Send email notification for low ratings (1-3) - regardless of feedback form
-        if (savedReview.getRating() <= 3) {
-            System.out.println("Low rating detected (" + savedReview.getRating() + "), sending email notification...");
-            try {
-                emailService.sendReviewNotificationToBusiness(savedReview);
-            } catch (Exception e) {
-                System.err.println("Failed to send review email notification: " + e.getMessage());
-                // Don't fail the review creation if email fails
-            }
-        }
+        // NO EMAIL SENT HERE - emails will be sent only when feedback is complete
+        System.out.println("Review saved. NO email sent - waiting for feedback completion.");
 
         return savedReview;
     }

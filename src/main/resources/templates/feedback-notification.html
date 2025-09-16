@@ -131,18 +131,6 @@
                 <strong>Staff behavior:</strong>
                 <span th:text="${#strings.capitalize(staffBehavior)}">Good</span>
             </li>
-            <li th:if="${cleanliness != null}">
-                <strong>Cleanliness:</strong>
-                <span th:text="${#strings.capitalize(cleanliness)}">Good</span>
-            </li>
-            <li th:if="${valueForMoney != null}">
-                <strong>Value for money:</strong>
-                <span th:text="${#strings.capitalize(valueForMoney)}">Good</span>
-            </li>
-            <li th:if="${overallExperience != null}">
-                <strong>Overall experience:</strong>
-                <span th:text="${#strings.capitalize(overallExperience)}">Good</span>
-            </li>
         </ul>
 
         <div class="divider" th:if="${suggestions != null and !#strings.isEmpty(suggestions)}"></div>
@@ -165,17 +153,6 @@
                 <span th:text="${contactPhone}">contact phone</span>
             </p>
         </div>
-
-        <div class="divider"></div>
-
-        <h2>Next steps</h2>
-        <ul style="padding-left: 18px; margin-top: 8px;">
-            <li>Review the feedback and note specific issues</li>
-            <li th:if="${wantsFollowup and !isAnonymous}">Reach out to the customer for a follow-up</li>
-            <li>Address the points to improve service quality</li>
-            <li th:if="${!isAnonymous}">Consider a courtesy reply to acknowledge their time</li>
-            <li th:if="${isAnonymous}">Use this feedback to improve your service for future customers</li>
-        </ul>
 
         <div class="divider"></div>
 

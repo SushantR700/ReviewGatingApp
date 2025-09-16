@@ -38,117 +38,167 @@ public class EmailService {
     private String frontendUrl;
 
     /**
-     * NEW: Send review notification to business owner when customer submits low rating
-     * This is sent immediately when review is submitted (regardless of feedback form)
-     * This is the ONLY email sent per review
+     * Send ONE complete email with review + feedback using your existing HTML template
      */
-    public void sendReviewNotificationToBusiness(Review review) {
+    public void sendCompleteReviewFeedbackNotification(Review review, Feedback feedback) {
         try {
             BusinessProfile business = review.getBusinessProfile();
             User businessOwner = business.getCreatedBy();
 
-            // Get customer information - handle both anonymous and non-anonymous reviews
+            // Get customer information
             String customerName = getCustomerName(review);
             String customerEmail = getCustomerEmail(review);
 
-            log.info("Sending review notification email to business owner: {} for business: {} from customer: {} (Rating: {}/5)",
+            log.info("Sending ONE complete email using HTML template to: {} for business: {} from customer: {} (Rating: {}/5)",
                     businessOwner.getEmail(), business.getBusinessName(), customerName, review.getRating());
 
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(fromEmail);
-            message.setTo(businessOwner.getEmail());
-            message.setSubject(String.format("New %d-Star Review for %s", review.getRating(), business.getBusinessName()));
-
-            StringBuilder body = new StringBuilder();
-            body.append("Hello ").append(businessOwner.getName()).append(",\n\n");
-            body.append("You have received a new review for your business: ").append(business.getBusinessName()).append("\n\n");
-
-            body.append("⭐ RATING: ").append(review.getRating()).append("/5 stars\n\n");
-
-            if (review.getIsAnonymous()) {
-                body.append("Customer: Anonymous Customer\n");
-            } else {
-                body.append("Customer: ").append(customerName);
-                if (customerEmail != null && !customerEmail.trim().isEmpty()) {
-                    body.append(" (").append(customerEmail).append(")");
-                }
-                body.append("\n");
+            try {
+                // Send HTML email using your existing feedback-notification.html template
+                sendHtmlEmailWithTemplate(review, feedback, business, businessOwner, customerName, customerEmail);
+                log.info("✅ HTML email sent successfully using feedback-notification.html template");
+            } catch (Exception htmlError) {
+                log.warn("Failed to send HTML email, falling back to plain text: {}", htmlError.getMessage());
+                // Fallback to plain text
+                sendPlainTextFallback(review, feedback, business, businessOwner, customerName, customerEmail);
+                log.info("✅ Plain text email sent successfully as fallback");
             }
-
-            body.append("Date: ").append(review.getCreatedAt().format(DateTimeFormatter.ofPattern("MMM dd, yyyy 'at' HH:mm"))).append("\n\n");
-
-            if (review.getComment() != null && !review.getComment().trim().isEmpty()) {
-                body.append("REVIEW COMMENT:\n");
-                body.append("\"").append(review.getComment()).append("\"\n\n");
-            }
-
-            // Add different messages based on rating
-            if (review.getRating() <= 2) {
-                body.append("This is a concerning low rating. ");
-            } else if (review.getRating() == 3) {
-                body.append("This is an average rating that could be improved. ");
-            }
-
-            body.append("The customer was shown a feedback form to provide more details about their experience. ");
-            body.append("You can check if they provided additional feedback in your admin panel.\n\n");
-
-            body.append("NEXT STEPS:\n");
-            body.append("• Review this feedback carefully\n");
-            body.append("• Identify areas for improvement\n");
-            body.append("• Consider reaching out to address any concerns\n");
-            if (!review.getIsAnonymous() && customerEmail != null && !customerEmail.trim().isEmpty()) {
-                body.append("• Customer contact: ").append(customerEmail).append("\n");
-            }
-            body.append("\n");
-
-            body.append("📊 View all reviews: ").append(frontendUrl).append("/admin\n");
-            body.append("🏪 Your business page: ").append(frontendUrl).append("/").append(createBusinessSlug(business.getBusinessName())).append("\n\n");
-            body.append("Best regards,\n").append(appName).append(" Team");
-
-            message.setText(body.toString());
-            emailSender.send(message);
-
-            log.info("✅ Review notification email sent successfully to: {}", businessOwner.getEmail());
 
         } catch (Exception e) {
-            log.error("❌ Failed to send review notification email", e);
-            // Don't throw exception to prevent review creation from failing
+            log.error("❌ Failed to send complete email notification", e);
+            // Don't throw exception to prevent feedback creation from failing
         }
     }
 
     /**
-     * DEPRECATED: Keep for backward compatibility but don't use
-     * We now send emails immediately when reviews are submitted, not when feedback is created
+     * Send HTML email using your existing feedback-notification.html template
      */
-    @Deprecated
-    public void sendFeedbackNotificationToBusiness(Feedback feedback) {
-        log.info("⚠️ sendFeedbackNotificationToBusiness called but emails are now sent when reviews are submitted, not when feedback is created");
-        // Do nothing - emails are now sent when reviews are submitted
+    private void sendHtmlEmailWithTemplate(Review review, Feedback feedback, BusinessProfile business,
+                                           User businessOwner, String customerName, String customerEmail) throws MessagingException {
+
+        MimeMessage message = emailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+        helper.setFrom(fromEmail);
+        helper.setTo(businessOwner.getEmail());
+        helper.setSubject(String.format("New customer feedback - %s", business.getBusinessName()));
+
+        // Prepare template variables for your existing feedback-notification.html
+        Context context = new Context();
+        context.setVariable("appName", appName);
+        context.setVariable("businessOwnerName", businessOwner.getName());
+        context.setVariable("businessName", business.getBusinessName());
+
+        // Review data
+        context.setVariable("rating", review.getRating());
+        context.setVariable("customerName", customerName);
+        context.setVariable("customerEmail", customerEmail);
+        context.setVariable("isAnonymous", review.getIsAnonymous());
+        context.setVariable("submittedDate", review.getCreatedAt().format(DateTimeFormatter.ofPattern("MMM dd, yyyy 'at' HH:mm")));
+        context.setVariable("reviewComment", review.getComment());
+
+        // Feedback data
+        context.setVariable("feedbackText", feedback.getFeedbackText());
+        context.setVariable("serviceQuality", feedback.getServiceQuality());
+        context.setVariable("staffBehavior", feedback.getStaffBehavior());
+        context.setVariable("cleanliness", feedback.getCleanliness());
+        context.setVariable("valueForMoney", feedback.getValueForMoney());
+        context.setVariable("overallExperience", feedback.getOverallExperience());
+        context.setVariable("suggestions", feedback.getSuggestions());
+        context.setVariable("wantsFollowup", feedback.getWantsFollowup());
+        context.setVariable("contactEmail", feedback.getContactEmail());
+        context.setVariable("contactPhone", feedback.getContactPhone());
+
+        // Process your existing template
+        String htmlContent = templateEngine.process("feedback-notification", context);
+        helper.setText(htmlContent, true);
+
+        emailSender.send(message);
     }
 
     /**
-     * DEPRECATED: Keep for backward compatibility but don't use
+     * Plain text fallback if HTML template fails
      */
-    @Deprecated
-    public void sendSimpleFeedbackNotification(Feedback feedback) {
-        log.info("⚠️ sendSimpleFeedbackNotification called but emails are now sent when reviews are submitted, not when feedback is created");
-        // Do nothing - emails are now sent when reviews are submitted
+    private void sendPlainTextFallback(Review review, Feedback feedback, BusinessProfile business,
+                                       User businessOwner, String customerName, String customerEmail) {
+
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(fromEmail);
+        message.setTo(businessOwner.getEmail());
+        message.setSubject(String.format("New customer feedback - %s", business.getBusinessName()));
+
+        StringBuilder body = new StringBuilder();
+        body.append("Hello ").append(businessOwner.getName()).append(",\n\n");
+        body.append("You received new feedback for ").append(business.getBusinessName()).append(".\n\n");
+
+        // Review section
+        body.append("=== REVIEW DETAILS ===\n");
+        body.append("Rating: ").append(review.getRating()).append("/5\n");
+        body.append("Customer: ").append(customerName);
+        if (!review.getIsAnonymous() && customerEmail != null && !customerEmail.trim().isEmpty()) {
+            body.append(" (").append(customerEmail).append(")");
+        }
+        body.append("\n");
+        body.append("Date: ").append(review.getCreatedAt().format(DateTimeFormatter.ofPattern("MMM dd, yyyy 'at' HH:mm"))).append("\n");
+
+        if (review.getComment() != null && !review.getComment().trim().isEmpty()) {
+            body.append("Review: \"").append(review.getComment()).append("\"\n");
+        }
+        body.append("\n");
+
+        // Feedback section
+        body.append("=== ADDITIONAL FEEDBACK ===\n");
+        if (feedback.getFeedbackText() != null && !feedback.getFeedbackText().trim().isEmpty()) {
+            body.append("Comments: \"").append(feedback.getFeedbackText()).append("\"\n");
+        }
+
+        if (feedback.getServiceQuality() != null && !feedback.getServiceQuality().trim().isEmpty()) {
+            body.append("Service Quality: ").append(feedback.getServiceQuality()).append("\n");
+        }
+        if (feedback.getStaffBehavior() != null && !feedback.getStaffBehavior().trim().isEmpty()) {
+            body.append("Staff Behavior: ").append(feedback.getStaffBehavior()).append("\n");
+        }
+        if (feedback.getCleanliness() != null && !feedback.getCleanliness().trim().isEmpty()) {
+            body.append("Cleanliness: ").append(feedback.getCleanliness()).append("\n");
+        }
+        if (feedback.getValueForMoney() != null && !feedback.getValueForMoney().trim().isEmpty()) {
+            body.append("Value for Money: ").append(feedback.getValueForMoney()).append("\n");
+        }
+        if (feedback.getOverallExperience() != null && !feedback.getOverallExperience().trim().isEmpty()) {
+            body.append("Overall Experience: ").append(feedback.getOverallExperience()).append("\n");
+        }
+
+        if (feedback.getSuggestions() != null && !feedback.getSuggestions().trim().isEmpty()) {
+            body.append("Suggestions: \"").append(feedback.getSuggestions()).append("\"\n");
+        }
+
+        if (feedback.getWantsFollowup() && !review.getIsAnonymous()) {
+            body.append("\nCustomer requested follow-up:\n");
+            if (feedback.getContactEmail() != null && !feedback.getContactEmail().trim().isEmpty()) {
+                body.append("Email: ").append(feedback.getContactEmail()).append("\n");
+            }
+            if (feedback.getContactPhone() != null && !feedback.getContactPhone().trim().isEmpty()) {
+                body.append("Phone: ").append(feedback.getContactPhone()).append("\n");
+            }
+        }
+
+        body.append("\nBest regards,\n").append(appName).append(" Team");
+
+        message.setText(body.toString());
+        emailSender.send(message);
     }
 
     /**
-     * Helper method to get customer name from review (handles both anonymous and non-anonymous)
+     * Helper method to get customer name from review
      */
     private String getCustomerName(Review review) {
         if (review.getIsAnonymous()) {
             return "Anonymous Customer";
         }
 
-        // Check direct customer info first (for anonymous reviews with name)
         if (review.getCustomerName() != null && !review.getCustomerName().trim().isEmpty()) {
             return review.getCustomerName();
         }
 
-        // Check customer object (for logged-in users)
         if (review.getCustomer() != null) {
             if (review.getCustomer().getName() != null && !review.getCustomer().getName().trim().isEmpty()) {
                 return review.getCustomer().getName();
@@ -159,46 +209,26 @@ public class EmailService {
             }
         }
 
-        // Fallback
         return "Customer";
     }
 
     /**
-     * Helper method to get customer email from review (handles both anonymous and non-anonymous)
+     * Helper method to get customer email from review
      */
     private String getCustomerEmail(Review review) {
         if (review.getIsAnonymous()) {
-            return ""; // Don't include email for anonymous reviews
+            return "";
         }
 
-        // Check direct customer info first (for anonymous reviews with email)
         if (review.getCustomerEmail() != null && !review.getCustomerEmail().trim().isEmpty()) {
             return review.getCustomerEmail();
         }
 
-        // Check customer object (for logged-in users)
         if (review.getCustomer() != null && review.getCustomer().getEmail() != null) {
             return review.getCustomer().getEmail();
         }
 
         return "";
-    }
-
-    /**
-     * Helper method to create URL-friendly business name slug
-     */
-    private String createBusinessSlug(String businessName) {
-        if (businessName == null || businessName.trim().isEmpty()) {
-            return "";
-        }
-
-        return businessName
-                .toLowerCase()
-                .replaceAll("[^a-z0-9\\s-]", "") // Remove special characters except spaces and hyphens
-                .replaceAll("\\s+", "-") // Replace spaces with hyphens
-                .replaceAll("-+", "-") // Replace multiple hyphens with single hyphen
-                .trim()
-                .replaceAll("^-+|-+$", ""); // Remove leading/trailing hyphens
     }
 
     /**

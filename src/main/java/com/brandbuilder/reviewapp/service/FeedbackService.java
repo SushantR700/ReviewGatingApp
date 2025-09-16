@@ -21,7 +21,8 @@ public class FeedbackService {
     @Autowired
     private ReviewRepository reviewRepository;
 
-    // REMOVED: EmailService - no longer sending emails from feedback creation
+    @Autowired
+    private EmailService emailService;
 
     public List<Feedback> getAllFeedback() {
         return feedbackRepository.findAll();
@@ -78,8 +79,15 @@ public class FeedbackService {
         Feedback savedFeedback = feedbackRepository.save(feedback);
         System.out.println("✅ Feedback saved with ID: " + savedFeedback.getId());
 
-        // REMOVED: Email sending - emails are now sent when the review is initially submitted
-        System.out.println("📧 Email was already sent when the review was initially submitted. No additional email sent for feedback.");
+        // NOW SEND ONE COMPLETE EMAIL with both review and feedback data using HTML template
+        System.out.println("📧 Sending ONE complete email with review + feedback using HTML template...");
+        try {
+            emailService.sendCompleteReviewFeedbackNotification(review, savedFeedback);
+            System.out.println("✅ Complete email sent successfully using HTML template");
+        } catch (Exception e) {
+            System.err.println("❌ Failed to send complete email: " + e.getMessage());
+            // Don't fail the feedback creation if email fails
+        }
 
         return savedFeedback;
     }

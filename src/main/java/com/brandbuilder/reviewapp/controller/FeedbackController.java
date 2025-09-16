@@ -1,6 +1,8 @@
 package com.brandbuilder.reviewapp.controller;
 
 import com.brandbuilder.reviewapp.model.Feedback;
+import com.brandbuilder.reviewapp.model.Review;
+import com.brandbuilder.reviewapp.repo.ReviewRepository;
 import com.brandbuilder.reviewapp.service.FeedbackService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -8,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/feedback")
@@ -16,6 +19,9 @@ public class FeedbackController {
 
     @Autowired
     private FeedbackService feedbackService;
+
+    @Autowired
+    private ReviewRepository reviewRepository;
 
     @PostMapping("/review/{reviewId}")
     public ResponseEntity<?> createFeedback(
@@ -44,10 +50,32 @@ public class FeedbackController {
         }
     }
 
+    // NEW: Get feedback by review ID
     @GetMapping("/review/{reviewId}")
     public ResponseEntity<Feedback> getFeedbackByReviewId(@PathVariable Long reviewId) {
-        // This would require a service method to find review first, then get feedback
-        // For now, returning not implemented
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        System.out.println("=== Get Feedback by Review ID ===");
+        System.out.println("Review ID: " + reviewId);
+
+        try {
+            Optional<Review> reviewOpt = reviewRepository.findById(reviewId);
+            if (reviewOpt.isEmpty()) {
+                System.out.println("Review not found: " + reviewId);
+                return ResponseEntity.notFound().build();
+            }
+
+            Review review = reviewOpt.get();
+            Optional<Feedback> feedbackOpt = feedbackService.getFeedbackByReview(review);
+
+            if (feedbackOpt.isPresent()) {
+                System.out.println("Feedback found for review: " + reviewId);
+                return ResponseEntity.ok(feedbackOpt.get());
+            } else {
+                System.out.println("No feedback found for review: " + reviewId);
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            System.err.println("Error getting feedback by review ID: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 }
